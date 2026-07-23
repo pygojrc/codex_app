@@ -1,0 +1,17 @@
+{
+  "name": "chatgpt-linux-native-modules",
+  "version": "0.1.0",
+  "private": true,
+  "description": "为 Electron 42.3.0 构建 ChatGPT Linux 适配所需 native modules",
+  "dependencies": {
+    "@serialport/bindings-cpp": "12.0.1",
+    "better-sqlite3": "12.11.1",
+    "node-hid": "3.3.0",
+    "node-pty": "1.1.0",
+    "serialport": "12.0.0"
+  },
+  "devDependencies": {
+    "@electron/asar": "4.2.0",
+    "@electron/rebuild": "4.0.1"
+  }
+}

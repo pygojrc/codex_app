@@ -1,0 +1,47 @@
+{
+  "electronVersion": "42.3.0",
+  "electronArch": "x64",
+  "compatibilityOverrides": {
+    "better-sqlite3": {
+      "appJavaScriptVersion": "12.9.0",
+      "nativeBuildSourceVersion": "12.11.1",
+      "scope": "仅替换 better_sqlite3.node"
+    }
+  },
+  "host": {
+    "platform": "Linux-6.18.37-1-lts-x86_64-with-glibc2.43",
+    "machine": "x86_64"
+  },
+  "artifacts": [
+    {
+      "module": "better-sqlite3",
+      "relativePath": "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "size": 2369648,
+      "sha256": "ecf124bd49983c7a801c002b75b2af8645900bdbdd595f906f4ecff0ac14d3ec"
+    },
+    {
+      "module": "node-pty",
+      "relativePath": "node_modules/node-pty/build/Release/pty.node",
+      "size": 75888,
+      "sha256": "e2a69e7fd06291c048fed3f92ca2b2ce98d6fa8b2b162c08cd90babfcb68d810"
+    },
+    {
+      "module": "@serialport/bindings-cpp",
+      "relativePath": "node_modules/@serialport/bindings-cpp/build/Release/bindings.node",
+      "size": 195392,
+      "sha256": "8c55206a594546f0f4ec5996861485e04c437a4b366f32b9087a5e5cef4adc65"
+    },
+    {
+      "module": "node-hid",
+      "relativePath": "node_modules/node-hid/build/Release/HID.node",
+      "size": 3359120,
+      "sha256": "2d9f758c9fb34df74f7bea9da6320b811e67e2f9a096bcf2a32bc562359edc71"
+    },
+    {
+      "module": "node-hid-hidraw",
+      "relativePath": "node_modules/node-hid/build/Release/HID_hidraw.node",
+      "size": 3352080,
+      "sha256": "7c03dfdca00a0387cec5a88a4456dff3b9bf6dca45cd091bba22f09cc8ad82fc"
+    }
+  ]
+}
