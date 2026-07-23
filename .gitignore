@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 项目内工具缓存与临时文件
+/.cache/
+/tmp/
+*.log
+*.pid
+core
+core.*
+
+# 输入大文件；README、manifest 和校验和继续跟踪
+/inputs/**/*.dmg
+/inputs/**/*.zip
+/inputs/**/*.tar
+/inputs/**/*.tar.gz
+/inputs/**/*.tgz
+/inputs/**/*.tar.zst
+
+# Electron runtime 下载与解包内容
+/runtime/**/downloads/
+/runtime/**/extracted/
+
+# native module 依赖、编译目录和二进制产物
+/native/**/node_modules/
+/native/**/build/
+/native/**/artifacts/
+*.node
+
+# 构建与发行大文件；允许跟踪清单和校验和
+/build/
+/dist/*
+!/dist/README.md
+!/dist/*.sha256
+!/dist/manifest*.json
+
+# 常见发行格式
+*.AppImage
+*.deb
+*.rpm
+*.tar.zst
+
+# 本地配置与凭据
+.env
+.env.*
+!.env.example
+*.token
+auth.json
+
+# 编辑器与系统文件
+.DS_Store
+.idea/
+.vscode/
