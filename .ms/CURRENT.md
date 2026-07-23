@@ -3,19 +3,20 @@
 ## 当前结论
 
 - 当前任务：CHATGPTADAPTER-001 ChatGPT 26.715.72359 Linux 独立适配。
-- 当前状态：planned。
-- 当前阶段：已确立独立项目根、Git 跟踪边界和实施计划。
-- 下一步：复制并校验项目内 DMG 输入，准备 Electron 42.3.0 Linux x64
-  runtime 下载 manifest。
-- 完成证据：初始提交 `415b42b`；DMG、runtime、native artifacts、build 和 dist
-  忽略路径已通过 `git check-ignore` 验证。
+- 当前状态：done_first_pass。
+- 当前阶段：独立构建、静态验收、stdio/WebSocket headless GUI 冒烟和发行打包完成。
+- 下一步：在有桌面会话的 Linux 环境人工检查登录、创建线程、终端和 Open with
+  交互；根据真实 Spark 请求决定是否需要 summary workaround。
+- 完成证据：Electron 42.3.0 官方 SHA256 通过；五个 native artifact 在 ABI 146
+  实际加载；18 个补丁精确命中；4 个离线测试通过；两种 transport 均存活 15 秒；
+  `dist/manifest.json` 已生成。
 - 最后更新：2026-07-23。
 
 ## 任务链
 
 | 顺序 | 任务 ID | 名称 | 状态 | 入口 |
 | --- | --- | --- | --- | --- |
-| 1 | CHATGPTADAPTER-001 | ChatGPT 26.715.72359 Linux 独立适配 | planned | `.ms/tasks/01_chatgpt_26_715_72359_linux/README.md` |
+| 1 | CHATGPTADAPTER-001 | ChatGPT 26.715.72359 Linux 独立适配 | done_first_pass | `.ms/tasks/01_chatgpt_26_715_72359_linux/README.md` |
 
 ## 状态规则
 

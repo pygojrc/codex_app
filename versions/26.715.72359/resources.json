@@ -1,0 +1,34 @@
+{
+  "codex": {
+    "action": "exclude",
+    "reason": "DMG 文件为 macOS arm64；launcher 强制使用系统 native CODEX_CLI_PATH"
+  },
+  "codex-code-mode-host": {
+    "action": "exclude",
+    "reason": "DMG 文件为 macOS arm64；系统 codex 没有对应 Linux sibling 时安全降级"
+  },
+  "codex_chronicle": {
+    "action": "exclude",
+    "reason": "DMG 文件为 macOS arm64；bundle 在资源缺失时禁用 Chronicle sidecar"
+  },
+  "rg": {
+    "action": "exclude",
+    "reason": "DMG 文件为 macOS arm64；Linux 主机使用 PATH 中的 rg"
+  },
+  "cua_node": {
+    "action": "exclude",
+    "reason": "computer-use 插件首轮不启用，且目录包含平台相关 runtime"
+  },
+  "native": {
+    "action": "exclude",
+    "reason": "目录内容均为 macOS native artifacts"
+  },
+  "default_app": {
+    "action": "exclude",
+    "reason": "Electron 默认应用资源，不是 ChatGPT 主应用运行依赖"
+  },
+  "latex/bin/tectonic": {
+    "action": "replace",
+    "reason": "用 Tectonic 官方 GitHub Release 的 Linux x86_64 musl 0.16.9 替换 macOS arm64 文件"
+  }
+}

@@ -7,9 +7,10 @@ ChatGPT/Codex `26.715.72359` Linux x86_64 版本。
 
 ## 状态
 
-- `planned`
+- `done_first_pass`
 - 正式计划：`docs/2026-07-23_独立项目Linux适配计划.md`
-- 本轮只完成项目边界和计划，不下载 runtime、不实现、不构建、不安装、不启动。
+- 首轮独立构建、发行包、静态验收与 headless 动态冒烟已经完成。
+- 待有图形会话时人工验收登录、线程、终端、Open with 和 Spark 请求。
 
 ## 完成标准
 

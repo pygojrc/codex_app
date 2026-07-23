@@ -1,0 +1,12 @@
+[app]
+version = "26.715.72359"
+build_number = "5718"
+package_name = "openai-codex-electron"
+brand = "chatgpt"
+electron_version = "42.3.0"
+bundle_root = "ChatGPT Installer/ChatGPT.app"
+prototype_name = "ChatGPT-linux-26.715.72359"
+
+[plugins]
+active = ["browser", "chrome", "deep-research", "latex", "sites", "visualize"]
+excluded = ["computer-use", "record-and-replay"]
