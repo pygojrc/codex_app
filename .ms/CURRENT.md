@@ -7,6 +7,8 @@
 - 当前阶段：已确立独立项目根、Git 跟踪边界和实施计划。
 - 下一步：复制并校验项目内 DMG 输入，准备 Electron 42.3.0 Linux x64
   runtime 下载 manifest。
+- 完成证据：初始提交 `415b42b`；DMG、runtime、native artifacts、build 和 dist
+  忽略路径已通过 `git check-ignore` 验证。
 - 最后更新：2026-07-23。
 
 ## 任务链
