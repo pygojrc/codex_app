@@ -45,7 +45,7 @@ jobs:
             libusb hidapi systemd-libs \
             gtk3 nss alsa-lib libxss libnotify libsecret xdg-utils \
             mesa libxkbcommon libxcomposite libxdamage libxrandr \
-            xorg-server-xvfb namcap
+            xorg-server-xvfb namcap desktop-file-utils
 
       - name: Create unprivileged build user
         shell: bash
@@ -94,9 +94,11 @@ jobs:
             bash -lc '
               cd "$GITHUB_WORKSPACE"
               uv run python -m unittest discover -s tests -v
+              bash -n packaging/arch/codex-app-launcher
+              desktop-file-validate packaging/arch/codex-app.desktop
             '
 
-      - name: Build Linux prototype
+      - name: Build and audit Linux prototype
         shell: bash
         run: |
           set -euxo pipefail
@@ -107,8 +109,15 @@ jobs:
             bash -lc '
               cd "$GITHUB_WORKSPACE"
               uv run scripts/构建_Linux版本.py --no-package
-              test -x "build/ChatGPT-linux-${APP_VERSION}/run-chatgpt-linux.sh"
-              test -x "build/ChatGPT-linux-${APP_VERSION}/ChatGPT"
+              prototype="build/ChatGPT-linux-${APP_VERSION}"
+              test -x "$prototype/run-chatgpt-linux.sh"
+              test -x "$prototype/ChatGPT"
+              install -d "$prototype/.codex-linux"
+              cp build/app-extracted/.codex-linux/patch-report.json \
+                "$prototype/.codex-linux/patch-report.json"
+              uv run python -c "from pathlib import Path; from chatgpt_adapter.platform_audit import audit_linux_payload; print(audit_linux_payload(Path(\"$prototype\")))"
+              python -c "import json; p=json.load(open(\"$prototype/.codex-linux/patch-report.json\")); assert p[\"summary\"][\"requiredFailures\"] == 0"
+              python -c "import json; p=json.load(open(\"$prototype/.codex-linux/platform-audit.json\")); assert not p[\"macho\"]; assert not p[\"unresolvedLibraries\"]"
             '
 
       - name: Build pacman package
@@ -146,6 +155,9 @@ jobs:
           test -x /usr/bin/codex-app
           test -x /opt/codex-app/ChatGPT
           test -f /usr/share/applications/codex-app.desktop
+          test -f /usr/share/doc/codex-app-linux/build-reports/patch-report.json
+          test -f /usr/share/doc/codex-app-linux/build-reports/platform-audit.json
+          grep -q 'CODEX_APP_SERVER_PORT:-18767' /usr/bin/codex-app
           pacman -Rns --noconfirm codex-app-linux
 
       - name: Upload workflow artifact
@@ -156,6 +168,7 @@ jobs:
             dist/*.pkg.tar.zst
             dist/SHA256SUMS
             packaging/arch/PKGBUILD
+            build/ChatGPT-linux-${{ env.APP_VERSION }}/.codex-linux/*.json
           if-no-files-found: error
           retention-days: 14
 
@@ -169,3 +182,4 @@ jobs:
             dist/*.pkg.tar.zst
             dist/SHA256SUMS
             packaging/arch/PKGBUILD
+            build/ChatGPT-linux-${{ env.APP_VERSION }}/.codex-linux/*.json
