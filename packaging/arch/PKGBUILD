@@ -2,7 +2,7 @@
 
 pkgname=codex-app-linux
 pkgver=26.715.72359
-pkgrel=1
+pkgrel=2
 pkgdesc='Unofficial ChatGPT/Codex desktop application adapted for Linux'
 arch=('x86_64')
 url='https://github.com/pygojrc/codex_app'
@@ -39,8 +39,8 @@ depends=(
 optdepends=('codex: native Codex CLI and app-server')
 provides=('codex-app')
 options=('!strip' '!debug')
-source=('codex-app.desktop')
-sha256sums=('SKIP')
+source=('codex-app.desktop' 'codex-app-launcher')
+sha256sums=('SKIP' 'SKIP')
 
 _project_root="${PROJECT_ROOT:-${startdir}/../..}"
 _prototype="${_project_root}/build/ChatGPT-linux-${pkgver}"
@@ -54,23 +54,19 @@ package() {
   install -d "${pkgdir}/opt/codex-app"
   cp -a "${_prototype}/." "${pkgdir}/opt/codex-app/"
 
-  install -Dm755 /dev/stdin "${pkgdir}/usr/bin/codex-app" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-if command -v codex >/dev/null 2>&1; then
-  export CODEX_CLI_PATH="${CODEX_CLI_PATH:-$(command -v codex)}"
-fi
-
-exec /opt/codex-app/run-chatgpt-linux.sh "$@"
-EOF
-
+  install -Dm755 "${srcdir}/codex-app-launcher" "${pkgdir}/usr/bin/codex-app"
   install -Dm644 "${srcdir}/codex-app.desktop" \
     "${pkgdir}/usr/share/applications/codex-app.desktop"
 
   if [[ -f "${_prototype}/resources/codex-gui.png" ]]; then
     install -Dm644 "${_prototype}/resources/codex-gui.png" \
       "${pkgdir}/usr/share/icons/hicolor/512x512/apps/codex-app.png"
+  fi
+
+  if [[ -d "${_prototype}/.codex-linux" ]]; then
+    install -d "${pkgdir}/usr/share/doc/${pkgname}/build-reports"
+    cp -a "${_prototype}/.codex-linux/." \
+      "${pkgdir}/usr/share/doc/${pkgname}/build-reports/"
   fi
 
   if [[ -f "${_project_root}/LICENSE" ]]; then
