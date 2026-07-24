@@ -4,13 +4,17 @@
 
 - 当前任务：CHATGPTADAPTER-001 ChatGPT 26.715.72359 Linux 独立适配。
 - 当前状态：done_first_pass。
-- 当前阶段：独立构建、静态验收、stdio/WebSocket headless GUI 冒烟和发行打包完成。
-- 下一步：在有桌面会话的 Linux 环境人工检查登录、创建线程、终端和 Open with
-  交互；根据真实 Spark 请求决定是否需要 summary workaround。
+- 当前阶段：Dream Skin 构建期主题原型已完成静态验收，等待人工 GUI 验证；
+  主题版本尚未打包、尚未安装。
+- 下一步：使用临时 profile 人工检查 Gothic Void Crusade 首页、会话页、设置页、
+  菜单、弹窗以及深浅色可读性；人工确认前禁止打包和安装主题版本。
 - 完成证据：Electron 42.3.0 官方 SHA256 通过；五个 native artifact 在 ABI 146
   实际加载；18 个补丁精确命中；4 个离线测试通过；两种 transport 均存活 15 秒；
-  `dist/manifest.json` 已生成。
-- 最后更新：2026-07-23。
+  `dist/manifest.json` 已生成；`inode/directory` 默认程序已修正为 Dolphin；
+  JetBrains Linux target 可解析 Toolbox 实际可执行路径；发行包已复制到
+  `/data/pkg`，应用、命令入口和 Codex 官方桌面图标已安装；Dream Skin runtime、
+  CSS、selector contract 和 Gothic preset 已归档到项目内，主题原型静态验收通过。
+- 最后更新：2026-07-24。
 
 ## 任务链
 

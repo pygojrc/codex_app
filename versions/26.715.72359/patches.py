@@ -23,6 +23,16 @@ PATCHES = (
         "{return!I9(e)&&(t||n===`linux`)}",
     ),
     Patch(
+        "Linux main window Codex icon",
+        "main",
+        "M=new l.BrowserWindow({width:b,height:x,...S===void 0||C===void 0?"
+        "{}:{x:S,y:C},title:t??l.app.getName(),backgroundColor:A,show:s,parent:d,",
+        "M=new l.BrowserWindow({icon:process.platform===`linux`?(0,f.join)"
+        "(process.resourcesPath,`codex-gui.png`):void 0,width:b,height:x,"
+        "...S===void 0||C===void 0?{}:{x:S,y:C},title:t??l.app.getName(),"
+        "backgroundColor:A,show:s,parent:d,",
+    ),
+    Patch(
         "Linux main file manager",
         "main",
         "l1=A$({id:`fileManager`,label:`Finder`,icon:`apps/finder.png`,"
@@ -83,7 +93,9 @@ PATCHES = (
         "args:V1},win32:a&&o&&s?{label:t,icon:n,kind:`editor`,detect:()=>z1({"
         "pathCommands:a,installDirPrefixes:o,installExecutables:s,"
         "fallbackPaths:c}),args:V1}:void 0,linux:l?{label:t,icon:n,"
-        "kind:`editor`,detect:()=>Ds(l)??l,args:V1}:void 0}}}",
+        "kind:`editor`,detect:()=>Ds(l)??((e=>(0,g.existsSync)(e)?e:null))"
+        "((0,f.join)((0,d.homedir)(),`.local`,`share`,`JetBrains`,`Toolbox`,"
+        "`apps`,r===`intellij`?`intellij-idea`:r,`bin`,l)),args:V1}:void 0}}}",
     ),
     Patch(
         "Linux main IntelliJ",
@@ -196,7 +208,9 @@ PATCHES = (
         "args:N9},win32:a&&o&&s?{label:t,icon:n,kind:`editor`,detect:()=>Pde({"
         "pathCommands:a,installDirPrefixes:o,installExecutables:s,"
         "fallbackPaths:c}),args:N9}:void 0,linux:l?{label:t,icon:n,"
-        "kind:`editor`,detect:()=>U7(l)??l,args:N9}:void 0}}}",
+        "kind:`editor`,detect:()=>U7(l)??((e=>(0,w.existsSync)(e)?e:null))"
+        "((0,E.join)((0,T.homedir)(),`.local`,`share`,`JetBrains`,`Toolbox`,"
+        "`apps`,r===`intellij`?`intellij-idea`:r,`bin`,l)),args:N9}:void 0}}}",
     ),
     Patch(
         "Linux worker IntelliJ",

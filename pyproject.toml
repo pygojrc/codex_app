@@ -1,6 +1,6 @@
 [project]
 name = "chatgpt-adapter"
-version = "0.1.0"
+version = "0.1.4"
 description = "从 ChatGPT macOS DMG 构建 Linux 桌面适配版本"
 requires-python = ">=3.12"
 

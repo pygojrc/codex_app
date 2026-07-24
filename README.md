@@ -52,11 +52,44 @@ CODEX_APP_SERVER_PORT=18766 uv run --no-project scripts/冒烟_GUI.py --seconds 
 - 指定未监听端口时验证 Electron 使用 `/data/bin/codex` 启动 stdio app-server。
 - 无图形会话时脚本使用 Electron `--headless`，profile 和日志只写入 `tmp/`。
 
+## Dream Skin 主题原型
+
+当前版本通过 `versions/26.715.72359/theme.toml` 启用构建期 Dream Skin，首轮预设为
+`Gothic Void Crusade`。主题编译器只向 `webview/index.html` 注册同源外部脚本，
+生产 launcher 不开放 CDP。
+
+主题原型只构建、不打包：
+
+```bash
+uv run scripts/构建_Linux版本.py --no-package
+```
+
+人工验收完成前，不运行正式打包和安装命令。需要恢复官方外观时，将
+`theme.toml` 的 `enabled` 改为 `false` 后重新构建原型。
+
 ## 当前产物
 
 - 原型：`build/ChatGPT-linux-26.715.72359/`
 - 发行包：`dist/chatgpt-linux-26.715.72359-x64.tar.zst`
 - 发行清单：`dist/manifest.json`
+
+## 安装
+
+构建和项目内验收通过后，使用版本化安装脚本：
+
+```bash
+uv run scripts/安装_Linux版本.py
+```
+
+脚本会完成以下部署：
+
+- 发行包：`/data/pkg/chatgpt-linux-26.715.72359-x64.tar.zst`
+- 应用目录：`/data/opt/chatgpt-gui-26.715.72359`
+- 主入口：`/data/bin/chatgpt_gui_26_715_72359`
+- Codex 兼容入口：`/data/bin/codex_gui_26_715_72359`
+- 应用菜单与桌面快捷方式使用当前 DMG 中的 Codex 官方图标
+
+安装过程不会主动启动 GUI；同版本目录已存在时会保留时间戳备份。
 
 DMG、runtime archive/解包目录、native binaries、build 和 tar.zst 均由 Git
 忽略；来源清单、SHA256、代码、锁文件和文档进入 Git。

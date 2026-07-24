@@ -68,8 +68,12 @@ def verify_patch_markers(root: Path, labels: list[str]) -> None:
     markers = {
         "main": (
             "return!I9(e)&&(t||n===`linux`)",
+            "icon:process.platform===`linux`?(0,f.join)"
+            "(process.resourcesPath,`codex-gui.png`)",
             "linux:{label:`File Manager`,detect:()=>Ds(`xdg-open`)",
             "linuxDetect:()=>Ds(`code`)??`code`",
+            "`.local`,`share`,`JetBrains`,`Toolbox`,`apps`,"
+            "r===`intellij`?`intellij-idea`:r",
             "linuxCommand:`idea`",
             "linuxCommand:`rustrover`",
             "linuxCommand:`pycharm`",
@@ -78,6 +82,8 @@ def verify_patch_markers(root: Path, labels: list[str]) -> None:
         "worker": (
             "linux:{label:`File Manager`,detect:()=>U7(`xdg-open`)",
             "linuxDetect:()=>U7(`code`)??`code`",
+            "`.local`,`share`,`JetBrains`,`Toolbox`,`apps`,"
+            "r===`intellij`?`intellij-idea`:r",
             "linuxCommand:`idea`",
             "linuxCommand:`rustrover`",
             "linuxCommand:`pycharm`",
@@ -91,5 +97,5 @@ def verify_patch_markers(root: Path, labels: list[str]) -> None:
         for marker in markers[area]:
             if marker not in source:
                 raise RuntimeError(f"{area} 缺少补丁标记: {marker}")
-    if len(labels) != 18:
+    if len(labels) != 19:
         raise RuntimeError(f"补丁数量异常: {len(labels)}")

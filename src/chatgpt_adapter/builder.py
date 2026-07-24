@@ -18,9 +18,20 @@ from .common import (
     run,
     sha256_file,
 )
-from .config import APP, ASAR_CLI, DMG, NATIVE_ARTIFACTS, NATIVE_MODULES, RUNTIME
+from .config import (
+    APP,
+    ASAR_CLI,
+    CODEX_ICON_NAME,
+    CODEX_ICON_SOURCE_NAME,
+    DMG,
+    NATIVE_ARTIFACTS,
+    NATIVE_MODULES,
+    RUNTIME,
+    WINDOW_CLASS,
+)
 from .patching import apply_patches
 from .plugins import compose_plugins
+from .theming import apply_theme
 
 
 def _extract_dmg(extract_root: Path) -> tuple[Path, Path]:
@@ -31,6 +42,7 @@ def _extract_dmg(extract_root: Path) -> tuple[Path, Path]:
         f"{prefix}/app.asar.unpacked/*",
         f"{prefix}/codex-notification.wav",
         f"{prefix}/icon-chatgpt.png",
+        f"{prefix}/{CODEX_ICON_SOURCE_NAME}",
         f"{prefix}/owl-electron-app.json",
         f"{prefix}/plugins/openai-bundled/.agents/plugins/marketplace.json",
     ]
@@ -155,6 +167,9 @@ def _repack_app(dmg_resources: Path, prototype: Path, build_root: Path) -> None:
     _install_native(extracted)
     labels = apply_patches(extracted)
     print(f"已应用 Linux 补丁: {len(labels)}")
+    theme = apply_theme(extracted)
+    if theme is not None:
+        print(f"已编译主题: {theme['preset']} ({theme['payloadRevision']})")
 
     files = sorted(
         str(path.relative_to(extracted))
@@ -176,6 +191,11 @@ def _repack_app(dmg_resources: Path, prototype: Path, build_root: Path) -> None:
         source = dmg_resources / name
         if source.is_file():
             shutil.copy2(source, resources / name)
+    codex_icon = dmg_resources / CODEX_ICON_SOURCE_NAME
+    ensure_file(codex_icon, "DMG 缺少 Codex 官方图标")
+    shutil.copy2(codex_icon, resources / CODEX_ICON_NAME)
+    # Linux tray 上游固定读取 icon-chatgpt.png，覆盖为同一份 Codex 图标。
+    shutil.copy2(codex_icon, resources / "icon-chatgpt.png")
     compose_plugins(dmg_resources, resources)
 
 
@@ -218,9 +238,9 @@ def _write_launcher(prototype: Path) -> None:
             export CODEX_ELECTRON_USER_DATA_PATH="${CODEX_ELECTRON_USER_DATA_PATH:-$default_profile}"
             export ELECTRON_ENABLE_LOGGING=1
             unset ELECTRON_RUN_AS_NODE
-            exec ./ChatGPT --no-sandbox "$@"
+            exec ./ChatGPT --class=__WINDOW_CLASS__ --no-sandbox "$@"
             """
-        ),
+        ).replace("__WINDOW_CLASS__", WINDOW_CLASS),
         encoding="utf-8",
     )
     launcher.chmod(0o755)

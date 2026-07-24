@@ -6,8 +6,8 @@ import os
 import shutil
 from pathlib import Path
 
-from .common import ensure_dir, ensure_file, is_macho, run
-from .config import ASAR_CLI, NATIVE_ARTIFACTS
+from .common import ensure_dir, ensure_file, is_macho, run, sha256_file
+from .config import ASAR_CLI, CODEX_ICON_NAME, NATIVE_ARTIFACTS, WINDOW_CLASS
 from .plugins import verify_plugins
 
 
@@ -48,6 +48,8 @@ def _verify_native(prototype: Path) -> None:
         info = run(["file", str(path)], capture_output=True).stdout
         if "ELF 64-bit" not in info or "x86-64" not in info:
             raise RuntimeError(f"native artifact 架构异常: {path}")
+    if "/webview/dream-skin/theme.js" not in listing:
+        raise RuntimeError("asar 缺少 Dream Skin 主题脚本")
 
 
 def _verify_no_macos(prototype: Path) -> None:
@@ -76,6 +78,7 @@ def verify_prototype(prototype: Path) -> Path:
         "Codex",
         "run-chatgpt-linux.sh",
         "resources/app.asar",
+        f"resources/{CODEX_ICON_NAME}",
     ):
         ensure_file(prototype / relative, "原型缺少关键文件")
     ensure_dir(
@@ -88,12 +91,19 @@ def verify_prototype(prototype: Path) -> Path:
     ).stdout
     if binaries.count("ELF 64-bit") != 2:
         raise RuntimeError(f"Electron 外壳异常:\n{binaries}")
+    icon = prototype / "resources" / CODEX_ICON_NAME
+    tray_icon = prototype / "resources/icon-chatgpt.png"
+    icon_info = run(["file", str(icon)], capture_output=True).stdout
+    if "PNG image data, 1024 x 1024" not in icon_info:
+        raise RuntimeError(f"Codex 图标异常: {icon_info.strip()}")
+    if sha256_file(icon) != sha256_file(tray_icon):
+        raise RuntimeError("桌面图标与 Linux tray 图标不一致")
     launcher = (prototype / "run-chatgpt-linux.sh").read_text(encoding="utf-8")
     for marker in (
         "CODEX_APP_SERVER_WS_URL",
         'export CODEX_CLI_PATH="$native_codex"',
         "CODEX_ELECTRON_USER_DATA_PATH",
-        "exec ./ChatGPT --no-sandbox",
+        f"exec ./ChatGPT --class={WINDOW_CLASS} --no-sandbox",
     ):
         if marker not in launcher:
             raise RuntimeError(f"launcher 缺少标记: {marker}")

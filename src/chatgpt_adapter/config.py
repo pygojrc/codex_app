@@ -51,6 +51,9 @@ BUILD_ROOT = PROJECT_ROOT / "build"
 DIST_ROOT = PROJECT_ROOT / "dist"
 TECTONIC = PROJECT_ROOT / "runtime/tectonic/0.16.9/extracted/tectonic"
 PACKAGE_NAME = f"chatgpt-linux-{APP.version}-x64.tar.zst"
+CODEX_ICON_SOURCE_NAME = "icon-codex-dark-color.png"
+CODEX_ICON_NAME = "codex-gui.png"
+WINDOW_CLASS = "Codex-26-715-72359"
 
 
 @dataclass(frozen=True)
