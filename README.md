@@ -70,12 +70,42 @@ uv run scripts/构建_Linux版本.py --no-package
 ## 当前产物
 
 - 原型：`build/ChatGPT-linux-26.715.72359/`
-- 发行包：`dist/chatgpt-linux-26.715.72359-x64.tar.zst`
+- 通用发行包：`dist/chatgpt-linux-26.715.72359-x64.tar.zst`
+- Arch Linux 安装包：`codex-app-linux-26.715.72359-1-x86_64.pkg.tar.zst`
 - 发行清单：`dist/manifest.json`
 
-## 安装
+## Arch Linux 软件包
 
-构建和项目内验收通过后，使用版本化安装脚本：
+`packaging/arch/PKGBUILD` 将已构建的 Linux 原型封装为仅支持 x86_64 的 pacman
+软件包。安装路径为：
+
+- `/opt/codex-app/`
+- `/usr/bin/codex-app`
+- `/usr/share/applications/codex-app.desktop`
+- `/usr/share/icons/hicolor/512x512/apps/codex-app.png`
+
+本地构建：
+
+```bash
+uv run scripts/构建_Linux版本.py --no-package
+cd packaging/arch
+makepkg --cleanbuild --force
+```
+
+安装生成的软件包：
+
+```bash
+sudo pacman -U ./codex-app-linux-26.715.72359-1-x86_64.pkg.tar.zst
+```
+
+GitHub Actions 工作流 `.github/workflows/build-linux-release.yml` 支持手动运行以及
+推送 `v*` 标签。手动运行会上传 Actions Artifact；标签运行还会创建 Release。
+工作流默认从官方地址下载 DMG，并按源码中的固定 SHA256 校验。仓库 Secret
+`CHATGPT_DMG_URL` 可覆盖默认下载地址。
+
+## 本地版本化安装
+
+构建和项目内验收通过后，也可使用原有的本地版本化安装脚本：
 
 ```bash
 uv run scripts/安装_Linux版本.py
@@ -91,5 +121,5 @@ uv run scripts/安装_Linux版本.py
 
 安装过程不会主动启动 GUI；同版本目录已存在时会保留时间戳备份。
 
-DMG、runtime archive/解包目录、native binaries、build 和 tar.zst 均由 Git
+DMG、runtime archive/解包目录、native binaries、build 和发行二进制均由 Git
 忽略；来源清单、SHA256、代码、锁文件和文档进入 Git。
