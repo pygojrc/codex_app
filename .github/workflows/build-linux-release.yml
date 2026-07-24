@@ -16,6 +16,7 @@ concurrency:
 env:
   APP_VERSION: "26.715.72359"
   PKG_NAME: "codex-app-linux"
+  DEFAULT_CHATGPT_DMG_URL: "https://persistent.oaistatic.com/codex-app-prod/ChatGPT.dmg"
 
 jobs:
   build:
@@ -26,6 +27,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify x86_64 runner
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test "$(uname -m)" = "x86_64"
 
       - name: Install build dependencies
         shell: bash
@@ -50,17 +57,14 @@ jobs:
       - name: Download and verify DMG input
         shell: bash
         env:
-          CHATGPT_DMG_URL: ${{ secrets.CHATGPT_DMG_URL }}
+          SECRET_CHATGPT_DMG_URL: ${{ secrets.CHATGPT_DMG_URL }}
         run: |
           set -euo pipefail
-          if [[ -z "${CHATGPT_DMG_URL}" ]]; then
-            echo "Repository secret CHATGPT_DMG_URL is required." >&2
-            exit 1
-          fi
+          dmg_url="${SECRET_CHATGPT_DMG_URL:-${DEFAULT_CHATGPT_DMG_URL}}"
           install -d -o builder -g builder /tmp/codex-app-input
           curl --fail --location --retry 3 \
             --output /tmp/codex-app-input/ChatGPT.dmg \
-            "${CHATGPT_DMG_URL}"
+            "${dmg_url}"
           chown builder:builder /tmp/codex-app-input/ChatGPT.dmg
 
       - name: Prepare inputs and dependencies
@@ -99,6 +103,7 @@ jobs:
           runuser -u builder -- env \
             HOME=/home/builder \
             GITHUB_WORKSPACE="${GITHUB_WORKSPACE}" \
+            APP_VERSION="${APP_VERSION}" \
             bash -lc '
               cd "$GITHUB_WORKSPACE"
               uv run scripts/构建_Linux版本.py --no-package
@@ -129,6 +134,10 @@ jobs:
         run: |
           set -euxo pipefail
           package="$(find dist -maxdepth 1 -type f -name '*.pkg.tar.zst' -print -quit)"
+          case "${package}" in
+            *-x86_64.pkg.tar.zst) ;;
+            *) echo "Unexpected package architecture: ${package}" >&2; exit 1 ;;
+          esac
           pacman -Qip "${package}"
           pacman -Qlp "${package}"
           namcap packaging/arch/PKGBUILD || true
