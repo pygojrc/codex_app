@@ -3,6 +3,8 @@ name: Build Arch Linux package
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
@@ -84,7 +86,7 @@ jobs:
               uv run --no-project scripts/构建_native模块.py --package-manager npm
             '
 
-      - name: Run unit tests
+      - name: Run unit and static tests
         shell: bash
         run: |
           set -euxo pipefail
@@ -94,6 +96,7 @@ jobs:
             bash -lc '
               cd "$GITHUB_WORKSPACE"
               uv run python -m unittest discover -s tests -v
+              python -m py_compile scripts/冒烟_GUI.py
               bash -n packaging/arch/codex-app-launcher
               desktop-file-validate packaging/arch/codex-app.desktop
             '
@@ -112,12 +115,25 @@ jobs:
               prototype="build/ChatGPT-linux-${APP_VERSION}"
               test -x "$prototype/run-chatgpt-linux.sh"
               test -x "$prototype/ChatGPT"
-              install -d "$prototype/.codex-linux"
-              cp build/app-extracted/.codex-linux/patch-report.json \
-                "$prototype/.codex-linux/patch-report.json"
-              uv run python -c "from pathlib import Path; from chatgpt_adapter.platform_audit import audit_linux_payload; print(audit_linux_payload(Path(\"$prototype\")))"
+              grep -q "CODEX_APP_SERVER_PORT:-18767" "$prototype/run-chatgpt-linux.sh"
               python -c "import json; p=json.load(open(\"$prototype/.codex-linux/patch-report.json\")); assert p[\"summary\"][\"requiredFailures\"] == 0"
               python -c "import json; p=json.load(open(\"$prototype/.codex-linux/platform-audit.json\")); assert not p[\"macho\"]; assert not p[\"unresolvedLibraries\"]"
+            '
+
+      - name: Run GUI and app-server smoke test
+        shell: bash
+        run: |
+          set -euxo pipefail
+          runuser -u builder -- env \
+            HOME=/home/builder \
+            GITHUB_WORKSPACE="${GITHUB_WORKSPACE}" \
+            bash -lc '
+              cd "$GITHUB_WORKSPACE"
+              uv run --no-project scripts/冒烟_GUI.py \
+                --seconds 15 \
+                --xvfb \
+                --mock-app-server \
+                --port 18767
             '
 
       - name: Build pacman package
@@ -138,7 +154,7 @@ jobs:
           test "$(find dist -maxdepth 1 -type f -name '*.pkg.tar.zst' | wc -l)" -eq 1
           sha256sum dist/*.pkg.tar.zst > dist/SHA256SUMS
 
-      - name: Validate and install package
+      - name: Validate, install and remove package
         shell: bash
         run: |
           set -euxo pipefail
@@ -159,6 +175,8 @@ jobs:
           test -f /usr/share/doc/codex-app-linux/build-reports/platform-audit.json
           grep -q 'CODEX_APP_SERVER_PORT:-18767' /usr/bin/codex-app
           pacman -Rns --noconfirm codex-app-linux
+          test ! -e /usr/bin/codex-app
+          test ! -e /opt/codex-app
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -169,7 +187,19 @@ jobs:
             dist/SHA256SUMS
             packaging/arch/PKGBUILD
             build/ChatGPT-linux-${{ env.APP_VERSION }}/.codex-linux/*.json
+            tmp/gui-smoke.log
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-compatibility-failure-${{ github.run_id }}
+          path: |
+            build/ChatGPT-linux-${{ env.APP_VERSION }}/.codex-linux/*.json
+            tmp/*.log
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Publish GitHub Release
