@@ -1,13 +1,15 @@
-"""加载版本补丁并执行精确单次替换。"""
+"""加载版本补丁、执行精确替换并生成机器可读报告。"""
 
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 
-from .config import VERSION_ROOT
+from .config import APP, VERSION_ROOT
 
 
 def _load_version_module() -> ModuleType:
@@ -31,27 +33,102 @@ def _area_files(root: Path, area: str) -> list[Path]:
     raise RuntimeError(f"未知补丁区域: {area}")
 
 
+def _write_report(root: Path, entries: list[dict[str, object]]) -> Path:
+    report_dir = root / ".codex-linux"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / "patch-report.json"
+    required_failures = [
+        entry for entry in entries
+        if entry["policy"] == "required-upstream" and entry["status"] != "applied"
+    ]
+    payload = {
+        "schema": "codex-linux-patch-report/1",
+        "appVersion": APP.version,
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total": len(entries),
+            "applied": sum(entry["status"] == "applied" for entry in entries),
+            "requiredFailures": len(required_failures),
+        },
+        "patches": entries,
+    }
+    report_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return report_path
+
+
 def apply_patches(root: Path) -> list[str]:
     module = _load_version_module()
     labels: list[str] = []
-    for patch in module.PATCHES:
+    entries: list[dict[str, object]] = []
+    failure: RuntimeError | None = None
+
+    for index, patch in enumerate(module.PATCHES, start=1):
         matches: list[Path] = []
-        for path in _area_files(root, patch.area):
-            source = path.read_text(encoding="utf-8")
-            count = source.count(patch.old)
-            if count > 1:
-                raise RuntimeError(f"{patch.label} 在 {path} 匹配 {count} 次")
-            if count == 1:
-                path.write_text(
-                    source.replace(patch.old, patch.new, 1),
-                    encoding="utf-8",
-                )
-                matches.append(path)
-        print(f"{patch.label}: {len(matches)}")
-        if len(matches) != 1:
-            raise RuntimeError(f"{patch.label} 总匹配次数异常: {len(matches)}")
-        labels.append(patch.label)
-    verify_patch_markers(root, labels)
+        status = "missing"
+        error_message: str | None = None
+        try:
+            for path in _area_files(root, patch.area):
+                source = path.read_text(encoding="utf-8")
+                count = source.count(patch.old)
+                if count > 1:
+                    raise RuntimeError(f"{patch.label} 在 {path} 匹配 {count} 次")
+                if count == 1:
+                    path.write_text(
+                        source.replace(patch.old, patch.new, 1),
+                        encoding="utf-8",
+                    )
+                    matches.append(path)
+            if len(matches) != 1:
+                raise RuntimeError(f"{patch.label} 总匹配次数异常: {len(matches)}")
+            status = "applied"
+            labels.append(patch.label)
+        except RuntimeError as error:
+            status = "failed"
+            error_message = str(error)
+            if failure is None:
+                failure = error
+
+        print(f"{patch.label}: {status} ({len(matches)})")
+        entries.append(
+            {
+                "id": f"version-{index:02d}",
+                "label": patch.label,
+                "area": patch.area,
+                "policy": "required-upstream",
+                "status": status,
+                "expectedMatches": 1,
+                "matches": len(matches),
+                "files": [str(path.relative_to(root)) for path in matches],
+                "error": error_message,
+            }
+        )
+
+    if failure is None:
+        try:
+            verify_patch_markers(root, labels)
+        except RuntimeError as error:
+            failure = error
+            entries.append(
+                {
+                    "id": "marker-verification",
+                    "label": "Linux 补丁标记验证",
+                    "area": "all",
+                    "policy": "required-upstream",
+                    "status": "failed",
+                    "expectedMatches": None,
+                    "matches": 0,
+                    "files": [],
+                    "error": str(error),
+                }
+            )
+
+    report_path = _write_report(root, entries)
+    print(f"补丁报告: {report_path}")
+    if failure is not None:
+        raise RuntimeError(f"关键 Linux 补丁失败；详见 {report_path}: {failure}") from failure
     return labels
 
 
