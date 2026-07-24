@@ -1,0 +1,162 @@
+name: Build Arch Linux package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arch-package-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_VERSION: "26.715.72359"
+  PKG_NAME: "codex-app-linux"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm \
+            git curl wget ca-certificates file 7zip zstd patchelf \
+            python python-pip uv nodejs npm pnpm \
+            libusb hidapi systemd-libs \
+            gtk3 nss alsa-lib libxss libnotify libsecret xdg-utils \
+            mesa libxkbcommon libxcomposite libxdamage libxrandr \
+            xorg-server-xvfb namcap
+
+      - name: Create unprivileged build user
+        shell: bash
+        run: |
+          set -euxo pipefail
+          useradd --create-home --shell /bin/bash builder
+          chown -R builder:builder "${GITHUB_WORKSPACE}"
+
+      - name: Download and verify DMG input
+        shell: bash
+        env:
+          CHATGPT_DMG_URL: ${{ secrets.CHATGPT_DMG_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CHATGPT_DMG_URL}" ]]; then
+            echo "Repository secret CHATGPT_DMG_URL is required." >&2
+            exit 1
+          fi
+          install -d -o builder -g builder /tmp/codex-app-input
+          curl --fail --location --retry 3 \
+            --output /tmp/codex-app-input/ChatGPT.dmg \
+            "${CHATGPT_DMG_URL}"
+          chown builder:builder /tmp/codex-app-input/ChatGPT.dmg
+
+      - name: Prepare inputs and dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          runuser -u builder -- env \
+            HOME=/home/builder \
+            GITHUB_WORKSPACE="${GITHUB_WORKSPACE}" \
+            bash -lc '
+              cd "$GITHUB_WORKSPACE"
+              source scripts/项目环境.sh
+              uv run --no-project scripts/准备_DMG输入.py \
+                --source /tmp/codex-app-input/ChatGPT.dmg
+              uv run --no-project scripts/下载_Electron_runtime.py
+              uv run --no-project scripts/下载_Tectonic.py
+              uv run --no-project scripts/构建_native模块.py --package-manager npm
+            '
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          runuser -u builder -- env \
+            HOME=/home/builder \
+            GITHUB_WORKSPACE="${GITHUB_WORKSPACE}" \
+            bash -lc '
+              cd "$GITHUB_WORKSPACE"
+              uv run python -m unittest discover -s tests -v
+            '
+
+      - name: Build Linux prototype
+        shell: bash
+        run: |
+          set -euxo pipefail
+          runuser -u builder -- env \
+            HOME=/home/builder \
+            GITHUB_WORKSPACE="${GITHUB_WORKSPACE}" \
+            bash -lc '
+              cd "$GITHUB_WORKSPACE"
+              uv run scripts/构建_Linux版本.py --no-package
+              test -x "build/ChatGPT-linux-${APP_VERSION}/run-chatgpt-linux.sh"
+              test -x "build/ChatGPT-linux-${APP_VERSION}/ChatGPT"
+            '
+
+      - name: Build pacman package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          runuser -u builder -- env \
+            HOME=/home/builder \
+            PROJECT_ROOT="${GITHUB_WORKSPACE}" \
+            bash -lc '
+              cd "$PROJECT_ROOT/packaging/arch"
+              makepkg --cleanbuild --force --noconfirm
+            '
+
+          install -d dist
+          find packaging/arch -maxdepth 1 -type f -name '*.pkg.tar.zst' \
+            -exec cp -v {} dist/ \;
+          test "$(find dist -maxdepth 1 -type f -name '*.pkg.tar.zst' | wc -l)" -eq 1
+          sha256sum dist/*.pkg.tar.zst > dist/SHA256SUMS
+
+      - name: Validate and install package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          package="$(find dist -maxdepth 1 -type f -name '*.pkg.tar.zst' -print -quit)"
+          pacman -Qip "${package}"
+          pacman -Qlp "${package}"
+          namcap packaging/arch/PKGBUILD || true
+          namcap "${package}" || true
+          pacman -U --noconfirm "${package}"
+          test -x /usr/bin/codex-app
+          test -x /opt/codex-app/ChatGPT
+          test -f /usr/share/applications/codex-app.desktop
+          pacman -Rns --noconfirm codex-app-linux
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-app-linux-${{ env.APP_VERSION }}-x86_64
+          path: |
+            dist/*.pkg.tar.zst
+            dist/SHA256SUMS
+            packaging/arch/PKGBUILD
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          files: |
+            dist/*.pkg.tar.zst
+            dist/SHA256SUMS
+            packaging/arch/PKGBUILD
