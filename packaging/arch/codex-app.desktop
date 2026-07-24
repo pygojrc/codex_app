@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Codex
+Comment=ChatGPT/Codex desktop application for Linux
+Exec=codex-app %U
+Icon=codex-app
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true
+StartupWMClass=Codex-26-715-72359
