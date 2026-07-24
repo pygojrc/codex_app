@@ -18,20 +18,28 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    container:
-      image: archlinux:base-devel
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install test dependencies
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.14"
+          enable-cache: true
+
+      - name: Install static tools
         shell: bash
         run: |
           set -euxo pipefail
-          pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm \
-            git python uv desktop-file-utils shellcheck
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck desktop-file-utils
 
       - name: Validate source
         shell: bash
@@ -42,5 +50,5 @@ jobs:
           bash -n packaging/arch/codex-app-launcher
           shellcheck packaging/arch/codex-app-launcher
           desktop-file-validate packaging/arch/codex-app.desktop
-          grep -q "arch=('x86_64')" packaging/arch/PKGBUILD
-          grep -q 'CODEX_APP_SERVER_PORT:-18767' packaging/arch/codex-app-launcher
+          grep -Fq "arch=('x86_64')" packaging/arch/PKGBUILD
+          grep -Fq 'CODEX_APP_SERVER_PORT:-18767' packaging/arch/codex-app-launcher
