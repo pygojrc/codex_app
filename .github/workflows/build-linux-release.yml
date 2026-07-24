@@ -16,6 +16,7 @@ concurrency:
 env:
   APP_VERSION: "26.715.72359"
   PKG_NAME: "codex-app-linux"
+  DEFAULT_CHATGPT_DMG_URL: "https://github.com/pygojrc/codex_app/releases/download/v0.0.1/ChatGPT.dmg"
 
 jobs:
   build:
@@ -56,17 +57,14 @@ jobs:
       - name: Download fixed DMG input
         shell: bash
         env:
-          CHATGPT_DMG_URL: ${{ secrets.CHATGPT_DMG_URL }}
+          SECRET_CHATGPT_DMG_URL: ${{ secrets.CHATGPT_DMG_URL }}
         run: |
           set -euo pipefail
-          if [[ -z "${CHATGPT_DMG_URL:-}" ]]; then
-            echo "Repository secret CHATGPT_DMG_URL must point to the immutable ChatGPT 26.715.72359 DMG." >&2
-            exit 1
-          fi
+          dmg_url="${SECRET_CHATGPT_DMG_URL:-${DEFAULT_CHATGPT_DMG_URL}}"
           install -d -o builder -g builder /tmp/codex-app-input
           curl --fail --location --retry 3 \
             --output /tmp/codex-app-input/ChatGPT.dmg \
-            "${CHATGPT_DMG_URL}"
+            "${dmg_url}"
           chown builder:builder /tmp/codex-app-input/ChatGPT.dmg
 
       - name: Prepare inputs and dependencies
