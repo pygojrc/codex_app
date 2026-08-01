@@ -1,0 +1,403 @@
+name: Build ChatGPT Desktop Linux Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      wrapper_ref:
+        description: ilysenko/codex-desktop-linux commit, tag, or branch
+        required: true
+        type: string
+        default: 9825ca69e486ca9e64922190b6ec8ecbf623dbf2
+      force_release:
+        description: Rebuild and replace assets when this DMG release already exists
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/build-chatgpt-linux-release.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: chatgpt-desktop-linux-release
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_DMG_URL: https://persistent.oaistatic.com/codex-app-prod/ChatGPT.dmg
+  DMG_PATH: ${{ runner.temp }}/chatgpt-upstream/ChatGPT.dmg
+  WRAPPER_REPOSITORY: ilysenko/codex-desktop-linux
+  WRAPPER_REF: ${{ inputs.wrapper_ref || '9825ca69e486ca9e64922190b6ec8ecbf623dbf2' }}
+  FORCE_RELEASE: ${{ inputs.force_release || 'false' }}
+  MAX_BUILD_THREADS: '2'
+  DMG_CACHE_SCHEMA_VERSION: v1
+
+jobs:
+  build-and-release:
+    name: Build x86_64 packages and publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Capture upstream DMG metadata
+        id: dmg-metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          headers_file="$(mktemp)"
+          trap 'rm -f "$headers_file"' EXIT
+          curl -fsSLI --retry 3 --retry-all-errors "$UPSTREAM_DMG_URL" > "$headers_file"
+
+          header_value() {
+            local name="$1"
+            awk -v wanted="$name" '
+              BEGIN { IGNORECASE = 1 }
+              {
+                line = $0
+                sub(/\r$/, "", line)
+                split(line, parts, ":")
+                if (tolower(parts[1]) == tolower(wanted)) {
+                  sub(/^[^:]+:[[:space:]]*/, "", line)
+                  print line
+                  exit
+                }
+              }
+            ' "$headers_file"
+          }
+
+          last_modified="$(header_value last-modified)"
+          etag="$(header_value etag | tr -d '"')"
+          content_length="$(header_value content-length)"
+          last_modified="${last_modified:-unknown}"
+          etag="${etag:-no-etag}"
+          content_length="${content_length:-unknown}"
+          cache_segment="$(printf '%s|%s|%s\n' "$last_modified" "$etag" "$content_length" | sha256sum | cut -d' ' -f1)"
+
+          {
+            echo "last_modified=$last_modified"
+            echo "etag=$etag"
+            echo "content_length=$content_length"
+            echo "cache_segment=$cache_segment"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore cached upstream DMG
+        id: dmg-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DMG_PATH }}
+          key: chatgpt-dmg-${{ env.DMG_CACHE_SCHEMA_VERSION }}-${{ steps.dmg-metadata.outputs.cache_segment }}
+
+      - name: Download official ChatGPT DMG
+        if: steps.dmg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$DMG_PATH")"
+          curl -fL --retry 3 --retry-all-errors -o "$DMG_PATH" "$UPSTREAM_DMG_URL"
+
+      - name: Identify release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$DMG_PATH"
+
+          dmg_sha256="$(sha256sum "$DMG_PATH" | cut -d' ' -f1)"
+          dmg_size_bytes="$(stat -c '%s' "$DMG_PATH")"
+          dmg_short_sha="${dmg_sha256:0:12}"
+          release_tag="chatgpt-linux-${dmg_short_sha}"
+          release_exists=false
+          should_build=true
+
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            release_exists=true
+            if [ "${FORCE_RELEASE,,}" != "true" ]; then
+              should_build=false
+            fi
+          fi
+
+          {
+            echo "dmg_sha256=$dmg_sha256"
+            echo "dmg_short_sha=$dmg_short_sha"
+            echo "dmg_size_bytes=$dmg_size_bytes"
+            echo "release_tag=$release_tag"
+            echo "release_exists=$release_exists"
+            echo "should_build=$should_build"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$should_build" = false ]; then
+            {
+              echo "## Build skipped"
+              echo
+              echo "Release \`$release_tag\` already exists for DMG SHA-256 \`$dmg_sha256\`."
+              echo "Run the workflow with **force_release** to rebuild and replace its assets."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Set up Node.js
+        if: steps.release.outputs.should_build == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install Linux build dependencies
+        if: steps.release.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates curl git jq file \
+            python3 make g++ p7zip-full unzip xz-utils zstd \
+            dpkg-dev
+
+      - name: Check out Linux wrapper
+        if: steps.release.outputs.should_build == 'true'
+        id: wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf wrapper
+          git init wrapper
+          git -C wrapper remote add origin "https://github.com/$WRAPPER_REPOSITORY.git"
+          git -C wrapper fetch --depth 1 origin "$WRAPPER_REF"
+          git -C wrapper checkout --detach FETCH_HEAD
+
+          wrapper_sha="$(git -C wrapper rev-parse HEAD)"
+          wrapper_short_sha="${wrapper_sha:0:12}"
+          {
+            echo "sha=$wrapper_sha"
+            echo "short_sha=$wrapper_short_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Convert official macOS app to Linux app
+        if: steps.release.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          PACKAGE_WITH_UPDATER=0 \
+          MAX_BUILD_THREADS="$MAX_BUILD_THREADS" \
+          make -C wrapper build-app DMG="$DMG_PATH"
+
+      - name: Derive package version
+        if: steps.release.outputs.should_build == 'true'
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          build_info="wrapper/codex-app/.codex-linux/build-info.json"
+          test -s "$build_info"
+          app_version="$(jq -r '.upstreamDmg.appVersion // empty' "$build_info")"
+          app_version="$(printf '%s' "$app_version" | sed -E 's/[^0-9A-Za-z.]+/./g; s/^\.+//; s/\.+$//')"
+          app_version="${app_version:-0.0.0}"
+          package_version="${app_version}+${{ steps.release.outputs.dmg_short_sha }}"
+          release_title="ChatGPT Desktop Linux ${app_version}"
+
+          {
+            echo "app_version=$app_version"
+            echo "package_version=$package_version"
+            echo "release_title=$release_title"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download AppImage packaging tool
+        if: steps.release.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tools
+          curl -fL --retry 3 --retry-all-errors \
+            -o tools/appimagetool-x86_64.AppImage \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod 0755 tools/appimagetool-x86_64.AppImage
+
+      - name: Build AppImage and DEB
+        if: steps.release.outputs.should_build == 'true'
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          rm -rf wrapper/dist
+
+          PACKAGE_WITH_UPDATER=0 \
+          MAX_BUILD_THREADS="$MAX_BUILD_THREADS" \
+          make -C wrapper deb PACKAGE_VERSION="$PACKAGE_VERSION"
+
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+          MAX_BUILD_THREADS="$MAX_BUILD_THREADS" \
+          make -C wrapper appimage \
+            PACKAGE_VERSION="$PACKAGE_VERSION" \
+            APPIMAGETOOL="$GITHUB_WORKSPACE/tools/appimagetool-x86_64.AppImage"
+
+      - name: Build RPM in Fedora container
+        if: steps.release.outputs.should_build == 'true'
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e PACKAGE_VERSION \
+            -e MAX_BUILD_THREADS \
+            -v "$GITHUB_WORKSPACE/wrapper:/src" \
+            fedora:latest \
+            bash -lc '
+              set -euo pipefail
+              dnf install -y --setopt=install_weak_deps=False \
+                rpm-build make findutils coreutils sed grep tar gzip
+              mkdir -p /tmp/build
+              cp -a /src/. /tmp/build/
+              PACKAGE_WITH_UPDATER=0 \
+              MAX_BUILD_THREADS="$MAX_BUILD_THREADS" \
+              make -C /tmp/build rpm PACKAGE_VERSION="$PACKAGE_VERSION"
+              find /tmp/build/dist -maxdepth 1 -type f -name "*.rpm" -exec cp -f {} /src/dist/ \;
+              chmod 0644 /src/dist/*.rpm
+            '
+
+      - name: Build Arch package in Arch Linux container
+        if: steps.release.outputs.should_build == 'true'
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e PACKAGE_VERSION \
+            -e MAX_BUILD_THREADS \
+            -v "$GITHUB_WORKSPACE/wrapper:/src" \
+            archlinux:latest \
+            bash -lc '
+              set -euo pipefail
+              pacman -Syu --noconfirm --needed base-devel zstd
+              useradd --create-home builder
+              mkdir -p /home/builder/build
+              cp -a /src/. /home/builder/build/
+              chown -R builder:builder /home/builder/build
+              runuser -u builder -- env \
+                PACKAGE_WITH_UPDATER=0 \
+                PACKAGE_VERSION="$PACKAGE_VERSION" \
+                MAX_BUILD_THREADS="$MAX_BUILD_THREADS" \
+                make -C /home/builder/build pacman
+              find /home/builder/build/dist -maxdepth 1 -type f -name "*.pkg.tar.zst" -exec cp -f {} /src/dist/ \;
+              chmod 0644 /src/dist/*.pkg.tar.zst
+            '
+
+      - name: Stage release assets and checksums
+        if: steps.release.outputs.should_build == 'true'
+        id: assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release
+          mkdir -p release
+          shopt -s nullglob
+
+          candidates=(
+            wrapper/dist/*.AppImage
+            wrapper/dist/*.deb
+            wrapper/dist/*.rpm
+            wrapper/dist/*.pkg.tar.zst
+          )
+
+          copied=0
+          for asset in "${candidates[@]}"; do
+            [ -L "$asset" ] && continue
+            cp -f "$asset" release/
+            copied=$((copied + 1))
+          done
+
+          if [ "$copied" -lt 4 ]; then
+            echo "Expected AppImage, DEB, RPM, and Arch package; found $copied assets" >&2
+            find wrapper/dist -maxdepth 2 -printf '%y %p\n' >&2 || true
+            exit 1
+          fi
+
+          (
+            cd release
+            mapfile -t files < <(find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort)
+            sha256sum "${files[@]}" > SHA256SUMS
+          )
+
+          echo "count=$copied" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        if: steps.release.outputs.should_build == 'true'
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+          WRAPPER_SHA: ${{ steps.wrapper.outputs.sha }}
+          DMG_SHA256: ${{ steps.release.outputs.dmg_sha256 }}
+          DMG_SIZE_BYTES: ${{ steps.release.outputs.dmg_size_bytes }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          Unofficial Linux packages generated from OpenAI's official macOS ChatGPT Desktop DMG.
+
+          - Upstream app version: \`$APP_VERSION\`
+          - Package version: \`$PACKAGE_VERSION\`
+          - Upstream DMG SHA-256: \`$DMG_SHA256\`
+          - Upstream DMG size: \`$DMG_SIZE_BYTES\` bytes
+          - Linux wrapper: \`$WRAPPER_REPOSITORY@$WRAPPER_SHA\`
+          - Architectures: \`x86_64/amd64\`
+          - Assets: AppImage, DEB, RPM, Arch/Manjaro package, and SHA256SUMS
+
+          The packages are built without the wrapper's local auto-update manager. Update by installing a newer Release.
+
+          This is an unofficial community conversion. OpenAI application code, binaries, assets, services, and trademarks retain their original ownership and terms.
+          EOF
+
+      - name: Upload workflow artifact
+        if: steps.release.outputs.should_build == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chatgpt-desktop-linux-${{ steps.release.outputs.dmg_short_sha }}
+          path: |
+            release/*
+            release-notes.md
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Create or update GitHub Release
+        if: steps.release.outputs.should_build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_TITLE: ${{ steps.version.outputs.release_title }}
+          RELEASE_EXISTS: ${{ steps.release.outputs.release_exists }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$RELEASE_EXISTS" = true ]; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-notes.md \
+              --latest
+            gh release upload "$RELEASE_TAG" release/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" release/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+          {
+            echo "## Release published"
+            echo
+            echo "- Tag: \`$RELEASE_TAG\`"
+            echo "- Title: $RELEASE_TITLE"
+            echo "- Assets: ${{ steps.assets.outputs.count }} packages plus checksums"
+          } >> "$GITHUB_STEP_SUMMARY"
