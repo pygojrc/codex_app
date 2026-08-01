@@ -28,10 +28,9 @@ concurrency:
 
 env:
   UPSTREAM_DMG_URL: https://persistent.oaistatic.com/codex-app-prod/ChatGPT.dmg
-  DMG_PATH: ${{ runner.temp }}/chatgpt-upstream/ChatGPT.dmg
+  DMG_PATH: /tmp/chatgpt-upstream/ChatGPT.dmg
   WRAPPER_REPOSITORY: ilysenko/codex-desktop-linux
-  WRAPPER_REF: ${{ inputs.wrapper_ref || '9825ca69e486ca9e64922190b6ec8ecbf623dbf2' }}
-  FORCE_RELEASE: ${{ inputs.force_release || 'false' }}
+  WRAPPER_REF_DEFAULT: 9825ca69e486ca9e64922190b6ec8ecbf623dbf2
   MAX_BUILD_THREADS: '2'
   DMG_CACHE_SCHEMA_VERSION: v1
 
@@ -103,6 +102,7 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          FORCE_RELEASE_INPUT: ${{ inputs.force_release }}
         shell: bash
         run: |
           set -euo pipefail
@@ -117,7 +117,7 @@ jobs:
 
           if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             release_exists=true
-            if [ "${FORCE_RELEASE,,}" != "true" ]; then
+            if [ "${FORCE_RELEASE_INPUT:-false}" != "true" ]; then
               should_build=false
             fi
           fi
@@ -160,13 +160,16 @@ jobs:
       - name: Check out Linux wrapper
         if: steps.release.outputs.should_build == 'true'
         id: wrapper
+        env:
+          WRAPPER_REF_INPUT: ${{ inputs.wrapper_ref }}
         shell: bash
         run: |
           set -euo pipefail
           rm -rf wrapper
+          wrapper_ref="${WRAPPER_REF_INPUT:-$WRAPPER_REF_DEFAULT}"
           git init wrapper
           git -C wrapper remote add origin "https://github.com/$WRAPPER_REPOSITORY.git"
-          git -C wrapper fetch --depth 1 origin "$WRAPPER_REF"
+          git -C wrapper fetch --depth 1 origin "$wrapper_ref"
           git -C wrapper checkout --detach FETCH_HEAD
 
           wrapper_sha="$(git -C wrapper rev-parse HEAD)"
